@@ -13,6 +13,7 @@ class USPRDataset(Dataset):
         self.imgDir = imgDir
         self.imgSize = imgSize
         self.imgList = glob.glob(os.path.join(self.imgDir, "*.jpg"))
+        self.imgList += glob.glob(os.path.join(self.imgDir, "*.png"))
         self.downsampleRate = downsampleRate
         self.downsampleSize = int(self.imgSize/self.downsampleRate)
         self.topK = topK
@@ -32,7 +33,7 @@ class USPRDataset(Dataset):
         if self.topK is None:
             return len(self.imgList)
         else:
-            return self.topK
+            return min(self.topK, len(self.imgList))
 
     def __getitem__(self, idx):
         image_path = self.imgList[idx]
@@ -46,8 +47,8 @@ class USPRDataset(Dataset):
 
 
 if __name__ == "__main__":
-    usprData = USPRDataset("../data/coco/coco_train2014")
+    usprData = USPRDataset("../data/Set14")
     usprLoader = DataLoader(usprData, batch_size=4, num_workers=4)
 
     for index, item in enumerate(usprLoader):
-        print(index)
+        print(item[1])

@@ -20,6 +20,8 @@ def parseJson(args, jsonPath):
 def parse_args():
     parser = argparse.ArgumentParser()
 
+    parser.add_argument("--test", action='store_const', default=False, const=True)
+
     # Training Hyper-parameters
     parser.add_argument("--numWorkers", type=int, default=0)
     parser.add_argument('--batchSize', type=int, default=16)
@@ -31,12 +33,14 @@ def parse_args():
 
     # Debugging
     parser.add_argument('--expFolder', type=str, default='../exps/first')
+    parser.add_argument('--checkpoint', type=str, default=None)
     parser.add_argument("--json-conf", type=str, default=None)
 
     # Training configuration
 
     parser.add_argument("--trainFolder", default="../data/coco/coco_train2014", type=str)
     parser.add_argument("--valFolder", default="../data/coco/coco_val2014", type=str)
+    parser.add_argument("--testFolder", default="../data/Set14", type=str)
 
     parser.add_argument("--valTopK", type=int, default=50, help='Number of steps to run validation.')
 

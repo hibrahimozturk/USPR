@@ -6,26 +6,14 @@ import os
 
 from dataloader import USPRDataset
 from torch.utils.tensorboard import SummaryWriter
-import math
-import numpy as np
 from usprnet import USPRNet
 from param import args
-from skimage.measure import compare_ssim
-
-
-def PSNR(pred, gt, shave_border=0):
-    height, width = pred.shape[:2]
-    pred = pred[shave_border:height - shave_border, shave_border:width - shave_border]
-    gt = gt[shave_border:height - shave_border, shave_border:width - shave_border]
-    imdff = pred - gt
-    rmse = math.sqrt(np.mean(imdff ** 2))
-    if rmse == 0:
-        return 100
-    return 20 * math.log10(255.0 / rmse)
+from skimage.measure import compare_ssim, compare_psnr
+from PIL import Image
 
 
 class USPR:
-    def __init__(self, expFolder, epochs=10):
+    def __init__(self, expFolder, epochs=10, checkpoint=None):
         self.model = USPRNet()
         self.expFolder = expFolder
         os.makedirs(self.expFolder, exist_ok=True)
@@ -35,9 +23,11 @@ class USPR:
 
         self.trainDataset = USPRDataset(args.trainFolder)
         self.valDataset = USPRDataset(args.valFolder, topK=args.valTopK)
+        self.TestDataset = USPRDataset(args.testFolder)
 
         self.trainLoader = DataLoader(self.trainDataset, batch_size=args.batchSize, num_workers=args.numWorkers)
         self.valLoader = DataLoader(self.valDataset, batch_size=args.batchSize, num_workers=args.numWorkers)
+        self.testLoader = DataLoader(self.TestDataset, batch_size=args.batchSize, num_workers=args.numWorkers)
 
         self.mseLoss = torch.nn.MSELoss()
         self.optim = torch.optim.Adam(self.model.parameters(), lr=args.lr)
@@ -46,6 +36,9 @@ class USPR:
 
         self.bestPSNR = 0
         self.bestSSIM = 0
+
+        if checkpoint is not None:
+            self.loadCheckpoint(checkpoint)
 
     def train(self):
         if torch.cuda.is_available():
@@ -98,10 +91,10 @@ class USPR:
                 outputs = self.model(imgDownsample)
                 loss = self.mseLoss(outputs, img)
                 print("Val [{}]:[{}/{}] Loss: {}".format(epoch, step, len(self.valLoader), loss.item()))
-                outputs = outputs.cpu().detach().numpy().transpose((0, 3, 2, 1))
-                imgs = img.cpu().detach().numpy().transpose((0, 3, 2, 1))
+                outputs = outputs.cpu().detach().numpy().transpose((0, 2, 3, 1))
+                imgs = img.cpu().detach().numpy().transpose((0, 2, 3, 1))
                 for output, img in zip(outputs, imgs):
-                    PSNRscore += PSNR(output, img)
+                    PSNRscore += compare_psnr(output, img)
                     SSIMscore += compare_ssim(output, img, multichannel=True)
             PSNRscore /= len(self.valLoader)
             SSIMscore /= len(self.valLoader)
@@ -110,6 +103,23 @@ class USPR:
             print("########## {} Epoch Validation Scores: PSNR: {}, SSIM: {} ##########".format(epoch, PSNRscore, SSIMscore))
 
         return PSNRscore, SSIMscore
+
+    def test(self):
+        if torch.cuda.is_available():
+            self.model.cuda()
+        for step, (imgDownsample, img) in enumerate(self.testLoader):
+            if torch.cuda.is_available():
+                imgDownsample = imgDownsample.cuda()
+            outputs = self.model(imgDownsample)
+            outputs = outputs.cpu().detach().numpy().transpose((0, 2, 3, 1))
+
+            if not os.path.exists(os.path.join(self.expFolder, "outputs")):
+                os.makedirs(os.path.join(self.expFolder, "outputs"))
+
+            for i, output in enumerate(outputs):
+                output *= 255
+                image = Image.fromarray(output.astype("uint8"))
+                image.save(os.path.join(self.expFolder, "outputs", str(i)+".jpg"))
 
     def saveCheckpoint(self, path):
         torch.save({"model": self.model.state_dict(),
@@ -121,8 +131,8 @@ class USPR:
 
     def loadCheckpoint(self, path):
         checkpoint = torch.load(path)
-        self.model.load_stated_dict(checkpoint["model"])
-        self.optimizer.load_state_dict(checkpoint["optimizer"])
+        self.model.load_state_dict(checkpoint["model"])
+        self.optim.load_state_dict(checkpoint["optimizer"])
         self.scheduler.load_state_dict(checkpoint["scheduler"])
         self.bestPSNR = checkpoint["bestPSNR"]
         self.bestSSIM = checkpoint["bestSSIM"]
@@ -130,5 +140,8 @@ class USPR:
 
 
 if __name__ == "__main__":
-    task = USPR(args.expFolder, epochs=args.epochs)
-    task.train()
+    task = USPR(args.expFolder, epochs=args.epochs, checkpoint=args.checkpoint)
+    if args.test:
+        task.test()
+    else:
+        task.train()
