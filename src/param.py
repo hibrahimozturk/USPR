@@ -20,34 +20,25 @@ def parseJson(args, jsonPath):
 def parse_args():
     parser = argparse.ArgumentParser()
 
-    # Data Splits
-    parser.add_argument("--train", default='train')
-    parser.add_argument("--valid", default='valid')
-    parser.add_argument("--test", default=None)
-
     # Training Hyper-parameters
-    parser.add_argument('--batchSize', dest='batch_size', type=int, default=16)
-    parser.add_argument('--lr', type=float, default=1e-4)
+    parser.add_argument("--numWorkers", type=int, default=0)
+    parser.add_argument('--batchSize', type=int, default=16)
+
+    parser.add_argument('--lr', type=float, default=1e-5)
     parser.add_argument('--epochs', type=int, default=10)
-    parser.add_argument('--seed', type=int, default=9595, help='random seed')
+    parser.add_argument("--schedulerGamma", type=float, default=0.5)
+    parser.add_argument("--schedulerStepSize", type=int, default=1000)
 
     # Debugging
-    parser.add_argument('--output', type=str, default='../exps/first')
-    parser.add_argument("--valTopK", type=int, default=None,
-                        help="number of validation images which will be validated")
-
+    parser.add_argument('--expFolder', type=str, default='../exps/first')
     parser.add_argument("--json-conf", type=str, default=None)
 
     # Training configuration
-    parser.add_argument("--numWorkers", dest='num_workers', default=0)
 
-    parser.add_argument("--train_img_dir", default="../data/coco/coco_train2014", type=str)
-    parser.add_argument("--val_img_dir", default="../data/coco/coco_val2014", type=str)
-
-    parser.add_argument("--val_step", type=int, default=500, help='Number of steps to run validation.')
-    parser.add_argument("--log_step", type=int, default=10, help='Number of steps to log.')
-
-    parser.add_argument("--finetune_detector", action="store_const", default=False, const=True)
+    parser.add_argument("--trainFolder", default="../data/coco/coco_train2014", type=str)
+    parser.add_argument("--valFolder", default="../data/coco/coco_val2014", type=str)
+    parser.add_argument("--valStep", type=int, default=500, help='Number of steps to run validation.')
+    parser.add_argument("--logStep", type=int, default=10, help='Number of steps to log.')
 
     # Parse the arguments.
     args = parser.parse_args()
@@ -55,10 +46,6 @@ def parse_args():
         args = parseJson(args, args.json_conf)
 
     print(args)
-    # Bind optimizer class.
-    random.seed(args.seed)
-    np.random.seed(args.seed)
-
     return args
 
 

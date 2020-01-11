@@ -1,5 +1,4 @@
 import os
-import torch
 import glob
 
 from torch.utils.data import Dataset
@@ -17,10 +16,15 @@ class USPRDataset(Dataset):
         self.downsampleRate = downsampleRate
         self.downsampleSize = int(self.imgSize/self.downsampleRate)
 
-        self.transform = transforms.Compose([
+        self.inputTransform = transforms.Compose([
             transforms.Resize(self.imgSize),
             transforms.ToTensor(),
             transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
+        ])
+
+        self.transform = transforms.Compose([
+            transforms.Resize(self.imgSize),
+            transforms.ToTensor(),
         ])
 
     def __len__(self):
@@ -32,7 +36,7 @@ class USPRDataset(Dataset):
         imgDownsample = img.resize((self.downsampleSize, self.downsampleSize))
 
         img = self.transform(img)
-        imgDownsample = self.transform(imgDownsample)
+        imgDownsample = self.inputTransform(imgDownsample)
 
         return imgDownsample, img
 
