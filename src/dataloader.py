@@ -8,13 +8,14 @@ import torchvision.transforms as transforms
 
 
 class USPRDataset(Dataset):
-    def __init__(self, imgDir, downsampleRate=2, imgSize=224):
+    def __init__(self, imgDir, downsampleRate=2, imgSize=224, topK=None):
 
         self.imgDir = imgDir
         self.imgSize = imgSize
         self.imgList = glob.glob(os.path.join(self.imgDir, "*.jpg"))
         self.downsampleRate = downsampleRate
         self.downsampleSize = int(self.imgSize/self.downsampleRate)
+        self.topK = topK
 
         self.inputTransform = transforms.Compose([
             transforms.Resize(self.imgSize),
@@ -28,7 +29,10 @@ class USPRDataset(Dataset):
         ])
 
     def __len__(self):
-        return len(self.imgList)
+        if self.topK is None:
+            return len(self.imgList)
+        else:
+            return self.topK
 
     def __getitem__(self, idx):
         image_path = self.imgList[idx]

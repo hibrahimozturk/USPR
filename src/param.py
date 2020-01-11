@@ -37,6 +37,9 @@ def parse_args():
 
     parser.add_argument("--trainFolder", default="../data/coco/coco_train2014", type=str)
     parser.add_argument("--valFolder", default="../data/coco/coco_val2014", type=str)
+
+    parser.add_argument("--valTopK", type=int, default=50, help='Number of steps to run validation.')
+
     parser.add_argument("--valStep", type=int, default=500, help='Number of steps to run validation.')
     parser.add_argument("--logStep", type=int, default=10, help='Number of steps to log.')
 

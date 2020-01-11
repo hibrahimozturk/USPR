@@ -5,13 +5,11 @@ from torch.utils.data.dataloader import DataLoader
 import os
 
 from dataloader import USPRDataset
-import torch.nn as nn
 from torch.utils.tensorboard import SummaryWriter
 import math
 import numpy as np
 from usprnet import USPRNet
 from param import args
-from PIL import Image
 from skimage.measure import compare_ssim
 
 
@@ -36,7 +34,7 @@ class USPR:
         self.epochs = epochs
 
         self.trainDataset = USPRDataset(args.trainFolder)
-        self.valDataset = USPRDataset(args.valFolder)
+        self.valDataset = USPRDataset(args.valFolder, topK=args.valTopK)
 
         self.trainLoader = DataLoader(self.trainDataset, batch_size=args.batchSize, num_workers=args.numWorkers)
         self.valLoader = DataLoader(self.valDataset, batch_size=args.batchSize, num_workers=args.numWorkers)
@@ -62,14 +60,24 @@ class USPR:
                 output = self.model(imgDownsample)
                 loss = self.mseLoss(output, img)
                 loss.backward()
-
                 self.optim.step()
                 self.stepCounter += 1
 
+                self.writer.add_scalar("Learning Rate", self.optim.param_groups[0]["lr"], self.stepCounter)
+                self.writer.add_scalar("Loss/Train", loss.item(), self.stepCounter)
                 if self.stepCounter % args.logStep == 0:
                     print("Train [{}][{}/{}]\t"
                           "Step {}\t"
                           "Loss:{:.3f}".format(epoch, step, len(self.trainLoader), self.stepCounter, loss.data.item()))
+
+                if self.stepCounter % args.valStep == 0:
+                    currentPSNR, currentSSIM = self.validation(epoch)
+                    self.saveCheckpoint(os.path.join(self.expFolder, "last.pth"))
+                    if currentPSNR > self.bestPSNR:
+                        self.bestPSNR = currentPSNR
+                        shutil.copy(os.path.join(self.expFolder, "last.pth"),
+                                    os.path.join(self.expFolder, "best.pth"))
+
             currentPSNR, currentSSIM = self.validation(epoch)
             self.saveCheckpoint(os.path.join(self.expFolder, "last.pth"))
             if currentPSNR > self.bestPSNR:
@@ -95,11 +103,11 @@ class USPR:
                 for output, img in zip(outputs, imgs):
                     PSNRscore += PSNR(output, img)
                     SSIMscore += compare_ssim(output, img, multichannel=True)
-                PSNRscore /= len(self.valLoader)
-                SSIMscore /= len(self.valLoader)
-                self.writer.add_scalar("EvalScore/PSNR", PSNRscore, self.stepCounter)
-                self.writer.add_scalar("EvalScore/SSIM", SSIMscore, self.stepCounter)
-        print("########## {} Epoch Validation Scores: PSNR: {}, SSIM: {} ##########".format(epoch, PSNRscore, SSIMscore))
+            PSNRscore /= len(self.valLoader)
+            SSIMscore /= len(self.valLoader)
+            self.writer.add_scalar("EvalScore/PSNR", PSNRscore, self.stepCounter)
+            self.writer.add_scalar("EvalScore/SSIM", SSIMscore, self.stepCounter)
+            print("########## {} Epoch Validation Scores: PSNR: {}, SSIM: {} ##########".format(epoch, PSNRscore, SSIMscore))
 
         return PSNRscore, SSIMscore
 
