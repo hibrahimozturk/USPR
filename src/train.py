@@ -10,10 +10,12 @@ from usprnet import USPRNet
 from param import args
 from skimage.measure import compare_ssim, compare_psnr
 from PIL import Image
+import adabound
 
 
 class USPR:
-    def __init__(self, expFolder, epochs=10, checkpoint=None):
+    def __init__(self, expFolder, epochs=10,
+                 finetunePretrainedNet=False, lossFunction="mse",  checkpoint=None):
         self.model = USPRNet()
         self.expFolder = expFolder
         os.makedirs(self.expFolder, exist_ok=True)
@@ -28,9 +30,20 @@ class USPR:
         self.trainLoader = DataLoader(self.trainDataset, batch_size=args.batchSize, num_workers=args.numWorkers)
         self.valLoader = DataLoader(self.valDataset, batch_size=args.batchSize, num_workers=args.numWorkers)
         self.testLoader = DataLoader(self.TestDataset, batch_size=args.batchSize, num_workers=args.numWorkers)
+        self.finetunePretrainedNet = finetunePretrainedNet
 
-        self.mseLoss = torch.nn.MSELoss()
-        self.optim = torch.optim.Adam(self.model.parameters(), lr=args.lr)
+        if torch.cuda.is_available():
+            self.model.cuda()
+
+        if lossFunction == "mse":
+            self.loss = torch.nn.MSELoss()
+        elif lossFunction == "l1":
+            self.loss = torch.nn.L1Loss()
+
+        optimParams = list(self.model.superResolution.parameters())
+        if self.finetunePretrainedNet:
+            optimParams += list(self.model.pretrainedNet.parameters())
+        self.optim = adabound.AdaBound(optimParams, lr=args.lr)
         self.scheduler = torch.optim.lr_scheduler.StepLR(self.optim, step_size=args.schedulerStepSize,
                                                          gamma=args.schedulerGamma)
 
@@ -41,8 +54,7 @@ class USPR:
             self.loadCheckpoint(checkpoint)
 
     def train(self):
-        if torch.cuda.is_available():
-            self.model.cuda()
+
         for epoch in range(self.epochs):
             for step, (imgDownsample, img) in enumerate(self.trainLoader):
                 self.model.train()
@@ -51,7 +63,7 @@ class USPR:
                     imgDownsample = imgDownsample.cuda()
                     img = img.cuda()
                 output = self.model(imgDownsample)
-                loss = self.mseLoss(output, img)
+                loss = self.loss(output, img)
                 loss.backward()
                 self.optim.step()
                 self.stepCounter += 1
@@ -89,15 +101,15 @@ class USPR:
                     imgDownsample = imgDownsample.cuda()
                     img = img.cuda()
                 outputs = self.model(imgDownsample)
-                loss = self.mseLoss(outputs, img)
+                loss = self.loss(outputs, img)
                 print("Val [{}]:[{}/{}] Loss: {}".format(epoch, step, len(self.valLoader), loss.item()))
                 outputs = outputs.cpu().detach().numpy().transpose((0, 2, 3, 1))
                 imgs = img.cpu().detach().numpy().transpose((0, 2, 3, 1))
                 for output, img in zip(outputs, imgs):
-                    PSNRscore += compare_psnr(output, img)
-                    SSIMscore += compare_ssim(output, img, multichannel=True)
-            PSNRscore /= len(self.valLoader)
-            SSIMscore /= len(self.valLoader)
+                    PSNRscore += compare_psnr(img, output)
+                    SSIMscore += compare_ssim(img, output, multichannel=True)
+            PSNRscore /= len(self.valLoader.dataset)
+            SSIMscore /= len(self.valLoader.dataset)
             self.writer.add_scalar("EvalScore/PSNR", PSNRscore, self.stepCounter)
             self.writer.add_scalar("EvalScore/SSIM", SSIMscore, self.stepCounter)
             print("########## {} Epoch Validation Scores: PSNR: {}, SSIM: {} ##########".format(epoch, PSNRscore, SSIMscore))
@@ -105,21 +117,37 @@ class USPR:
         return PSNRscore, SSIMscore
 
     def test(self):
+        PSNRscore = 0
+        SSIMscore = 0
+        imageCounter = 0
         if torch.cuda.is_available():
             self.model.cuda()
-        for step, (imgDownsample, img) in enumerate(self.testLoader):
+        for step, (imgDownsample, imgs) in enumerate(self.testLoader):
             if torch.cuda.is_available():
                 imgDownsample = imgDownsample.cuda()
-            outputs = self.model(imgDownsample)
-            outputs = outputs.cpu().detach().numpy().transpose((0, 2, 3, 1))
+            output = self.model(imgDownsample)
+            outputs = output.cpu().detach().numpy().transpose((0, 2, 3, 1))
+            imgs = imgs.cpu().detach().numpy().transpose((0, 2, 3, 1))
 
             if not os.path.exists(os.path.join(self.expFolder, "outputs")):
                 os.makedirs(os.path.join(self.expFolder, "outputs"))
 
-            for i, output in enumerate(outputs):
+            for img, output in zip(imgs, outputs):
+                PSNRscore += compare_psnr(img, output)
+                SSIMscore += compare_ssim(img, output, multichannel=True)
+
                 output *= 255
-                image = Image.fromarray(output.astype("uint8"))
-                image.save(os.path.join(self.expFolder, "outputs", str(i)+".jpg"))
+                outputImg = Image.fromarray(output.astype("uint8"))
+                outputImg.save(os.path.join(self.expFolder, "outputs", "output_" + str(imageCounter)+".jpg"))
+
+                img *= 255
+                inputImg = Image.fromarray(img.astype("uint8"))
+                inputImg.save(os.path.join(self.expFolder, "outputs", "input_" + str(imageCounter)+".jpg"))
+
+                imageCounter += 1
+        PSNRscore /= len(self.testLoader.dataset)
+        SSIMscore /= len(self.testLoader.dataset)
+        print("########## Test Scores: PSNR: {}, SSIM: {} ##########".format(PSNRscore, SSIMscore))
 
     def saveCheckpoint(self, path):
         torch.save({"model": self.model.state_dict(),
@@ -127,16 +155,18 @@ class USPR:
                     "scheduler": self.scheduler.state_dict(),
                     "stepCounter": self.stepCounter,
                     "bestPSNR": self.bestPSNR,
-                    "bestSSIM": self.bestSSIM}, path)
+                    "bestSSIM": self.bestSSIM,
+                    "finetunePretrainedNet": self.finetunePretrainedNet}, path)
 
     def loadCheckpoint(self, path):
         checkpoint = torch.load(path)
         self.model.load_state_dict(checkpoint["model"])
-        self.optim.load_state_dict(checkpoint["optimizer"])
         self.scheduler.load_state_dict(checkpoint["scheduler"])
         self.bestPSNR = checkpoint["bestPSNR"]
         self.bestSSIM = checkpoint["bestSSIM"]
         self.stepCounter = checkpoint["stepCounter"]
+        if not (self.finetunePretrainedNet ^ checkpoint["finetunePretrainedNet"]):
+            self.optim.load_state_dict(checkpoint["optimizer"])
 
 
 if __name__ == "__main__":

@@ -21,10 +21,14 @@ def parse_args():
     parser = argparse.ArgumentParser()
 
     parser.add_argument("--test", action='store_const', default=False, const=True)
+    parser.add_argument("--finetunePretrainedNet", action='store_const', default=False, const=True)
 
     # Training Hyper-parameters
     parser.add_argument("--numWorkers", type=int, default=0)
     parser.add_argument('--batchSize', type=int, default=16)
+
+    parser.add_argument("--lossFunction", type=str, default="mse",
+                        help="mse|l1")
 
     parser.add_argument('--lr', type=float, default=1e-5)
     parser.add_argument('--epochs', type=int, default=10)
