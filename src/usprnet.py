@@ -20,28 +20,40 @@ class SuperResolution(torch.nn.Module):
         super(SuperResolution, self).__init__()
         self.relu = nn.ReLU(inplace=True)
         self.sigmoid = nn.Sigmoid()
+        self.multiplier1 = torch.autograd.Variable(torch.rand(1, requires_grad=True))
         self.deconv1 = nn.ConvTranspose2d(2048, 1024, kernel_size=3, stride=2, padding=1, dilation=1, output_padding=1)
         self.bn1 = nn.BatchNorm2d(1024)
         self.deconv2 = nn.ConvTranspose2d(1024, 512, kernel_size=3, stride=2, padding=1, dilation=1, output_padding=1)
+        self.multiplier2 = torch.autograd.Variable(torch.rand(1, requires_grad=True))
         self.bn2 = nn.BatchNorm2d(512)
         self.deconv3 = nn.ConvTranspose2d(512, 256, kernel_size=3, stride=2, padding=1, dilation=1, output_padding=1)
+        self.multiplier3 = torch.autograd.Variable(torch.rand(1, requires_grad=True))
         self.bn3 = nn.BatchNorm2d(256)
         self.deconv4 = nn.ConvTranspose2d(256, 32, kernel_size=3, stride=2, padding=1, dilation=1, output_padding=1)
         self.bn4 = nn.BatchNorm2d(32)
         self.deconv5 = nn.ConvTranspose2d(32, 3, kernel_size=3, stride=2, padding=1, dilation=1, output_padding=1)
+        self.multiplier5 = torch.autograd.Variable(torch.rand(1, requires_grad=True))
         self.bn6 = nn.BatchNorm2d(3)
         self.conv = nn.Conv2d(3, 3, kernel_size=1, stride=1, padding=0)
 
+    def _apply(self, fn):
+        super(SuperResolution, self)._apply(fn)
+        self.multiplier1 = fn(self.multiplier1)
+        self.multiplier2 = fn(self.multiplier2)
+        self.multiplier3 = fn(self.multiplier3)
+        self.multiplier5 = fn(self.multiplier5)
+        return self
+
     def forward(self, features, inputImg):
         x = self.relu(self.deconv1(features["x7"]))
-        x = x + features["x6"]
+        x = self.bn1(x*self.multiplier1 + features["x6"])
         x = self.relu(self.deconv2(x))
-        x = x + features["x5"]
+        x = self.bn2(x*self.multiplier2 + features["x5"])
         x = self.relu(self.deconv3(x))
-        x = x + features["x4"]
-        x = self.relu(self.deconv4(x))
+        x = self.bn3(x*self.multiplier3 + features["x4"])
+        x = self.bn4(self.relu(self.deconv4(x)))
         x = self.relu(self.deconv5(x))
-        x = x + inputImg
+        x = self.sigmoid(self.conv(self.bn6(x*self.multiplier5 + inputImg)))
         return x
 
 
@@ -62,6 +74,7 @@ class Resnet50(torch.nn.Module):
 
 if __name__ == "__main__":
     uspr = USPRNet()
-    x = torch.autograd.Variable(torch.randn(1, 3, 224, 224))
+    uspr.cuda()
+    x = torch.autograd.Variable(torch.randn(1, 3, 224, 224)).cuda()
     result = uspr(x)
     print("Finish")
