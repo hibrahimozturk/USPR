@@ -24,11 +24,12 @@ class USPR:
         self.stepCounter = 0
         self.epochs = epochs
 
-        self.trainDataset = USPRDataset(args.trainFolder)
+        self.trainDataset = USPRDataset(args.trainFolder, train=True)
         self.valDataset = USPRDataset(args.valFolder, topK=args.valTopK)
         self.TestDataset = USPRDataset(args.testFolder)
 
-        self.trainLoader = DataLoader(self.trainDataset, batch_size=args.batchSize, num_workers=args.numWorkers)
+        self.trainLoader = DataLoader(self.trainDataset, batch_size=args.batchSize,
+                                      num_workers=args.numWorkers, shuffle=True)
         self.valLoader = DataLoader(self.valDataset, batch_size=args.batchSize, num_workers=args.numWorkers)
         self.testLoader = DataLoader(self.TestDataset, batch_size=args.batchSize, num_workers=args.numWorkers)
         self.finetunePretrainedNet = finetunePretrainedNet
