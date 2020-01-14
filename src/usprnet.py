@@ -18,7 +18,7 @@ class USPRNet(nn.Module):
 class SuperResolution(torch.nn.Module):
     def __init__(self):
         super(SuperResolution, self).__init__()
-        self.relu = nn.ReLU(inplace=True)
+        self.lrelu = nn.LeakyReLU(negative_slope=0.2, inplace=True)
         self.sigmoid = nn.Sigmoid()
         self.multiplier1 = torch.autograd.Variable(torch.rand(1, requires_grad=True))
         self.deconv1 = nn.ConvTranspose2d(2048, 1024, kernel_size=3, stride=2, padding=1, dilation=1, output_padding=1)
@@ -45,15 +45,15 @@ class SuperResolution(torch.nn.Module):
         return self
 
     def forward(self, features, inputImg):
-        x = self.relu(self.deconv1(features["x7"]))
+        x = self.lrelu(self.deconv1(features["x7"]))
         x = self.bn1(x*self.multiplier1 + features["x6"])
-        x = self.relu(self.deconv2(x))
+        x = self.lrelu(self.deconv2(x))
         x = self.bn2(x*self.multiplier2 + features["x5"])
-        x = self.relu(self.deconv3(x))
+        x = self.lrelu(self.deconv3(x))
         x = self.bn3(x*self.multiplier3 + features["x4"])
-        x = self.bn4(self.relu(self.deconv4(x)))
-        x = self.relu(self.deconv5(x))
-        x = self.sigmoid(self.conv(self.bn6(x*self.multiplier5 + inputImg)))
+        x = self.bn4(self.lrelu(self.deconv4(x)))
+        x = self.lrelu(self.deconv5(x))
+        x = self.sigmoid(x*self.multiplier5 + inputImg)
         return x
 
 
