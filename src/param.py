@@ -30,7 +30,7 @@ def parse_args():
     parser.add_argument("--lossFunction", type=str, default="mse",
                         help="mse|l1")
 
-    parser.add_argument('--lr', type=float, default=1e-5)
+    parser.add_argument('--lr', type=float, default=1e-4)
     parser.add_argument('--epochs', type=int, default=10)
     parser.add_argument("--schedulerGamma", type=float, default=0.5)
     parser.add_argument("--schedulerStepSize", type=int, default=1000)

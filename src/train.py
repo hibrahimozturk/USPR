@@ -11,6 +11,7 @@ from param import args
 from skimage.measure import compare_ssim, compare_psnr
 from PIL import Image
 import adabound
+import cv2
 
 
 class USPR:
@@ -44,7 +45,7 @@ class USPR:
         if self.finetunePretrainedNet:
             optimParams += list(self.model.pretrainedNet.parameters())
         self.optim = adabound.AdaBound(optimParams, lr=args.lr)
-        self.scheduler = torch.optim.lr_scheduler.StepLR(self.optim, step_size=args.schedulerStepSize,
+        self.scheduler = torch.optim.lr_scheduler.StepLR(self.optim, step_size=args.schedulerStepSize*len(self.trainLoader),
                                                          gamma=args.schedulerGamma)
 
         self.bestPSNR = 0
@@ -66,6 +67,8 @@ class USPR:
                 loss = self.loss(output, img)
                 loss.backward()
                 self.optim.step()
+                self.scheduler.step()
+
                 self.stepCounter += 1
 
                 self.writer.add_scalar("Learning Rate", self.optim.param_groups[0]["lr"], self.stepCounter)
@@ -106,8 +109,10 @@ class USPR:
                 outputs = outputs.cpu().detach().numpy().transpose((0, 2, 3, 1))
                 imgs = img.cpu().detach().numpy().transpose((0, 2, 3, 1))
                 for output, img in zip(outputs, imgs):
-                    PSNRscore += compare_psnr(img, output)
-                    SSIMscore += compare_ssim(img, output, multichannel=True)
+                    imgYCrCb = cv2.cvtColor(img, cv2.COLOR_BGR2YCR_CB)
+                    outputYCrCb = cv2.cvtColor(output, cv2.COLOR_BGR2YCR_CB)
+                    PSNRscore += compare_psnr(imgYCrCb[:, :, 0], outputYCrCb[:, :, 0])
+                    SSIMscore += compare_ssim(imgYCrCb[:, :, 0], outputYCrCb[:, :, 0])
             PSNRscore /= len(self.valLoader.dataset)
             SSIMscore /= len(self.valLoader.dataset)
             self.writer.add_scalar("EvalScore/PSNR", PSNRscore, self.stepCounter)
@@ -133,8 +138,10 @@ class USPR:
                 os.makedirs(os.path.join(self.expFolder, "outputs"))
 
             for img, output in zip(imgs, outputs):
-                PSNRscore += compare_psnr(img, output)
-                SSIMscore += compare_ssim(img, output, multichannel=True)
+                imgYCrCb = cv2.cvtColor(img, cv2.COLOR_BGR2YCR_CB)
+                outputYCrCb = cv2.cvtColor(output, cv2.COLOR_BGR2YCR_CB)
+                PSNRscore += compare_psnr(imgYCrCb[:, :, 0], outputYCrCb[:, :, 0])
+                SSIMscore += compare_ssim(imgYCrCb[:, :, 0], outputYCrCb[:, :, 0])
 
                 output *= 255
                 outputImg = Image.fromarray(output.astype("uint8"))
@@ -161,16 +168,17 @@ class USPR:
     def loadCheckpoint(self, path):
         checkpoint = torch.load(path)
         self.model.load_state_dict(checkpoint["model"])
-        self.scheduler.load_state_dict(checkpoint["scheduler"])
         self.bestPSNR = checkpoint["bestPSNR"]
         self.bestSSIM = checkpoint["bestSSIM"]
         self.stepCounter = checkpoint["stepCounter"]
         if not (self.finetunePretrainedNet ^ checkpoint["finetunePretrainedNet"]):
             self.optim.load_state_dict(checkpoint["optimizer"])
+            self.scheduler.load_state_dict(checkpoint["scheduler"])
 
 
 if __name__ == "__main__":
-    task = USPR(args.expFolder, epochs=args.epochs, checkpoint=args.checkpoint)
+    task = USPR(args.expFolder, finetunePretrainedNet=args.finetunePretrainedNet,
+                epochs=args.epochs, checkpoint=args.checkpoint)
     if args.test:
         task.test()
     else:

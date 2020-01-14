@@ -34,15 +34,14 @@ class SuperResolution(torch.nn.Module):
 
     def forward(self, features, inputImg):
         x = self.relu(self.deconv1(features["x7"]))
-        x = self.bn1(x + features["x6"])
+        x = x + features["x6"]
         x = self.relu(self.deconv2(x))
-        x = self.bn2(x + features["x5"])
+        x = x + features["x5"]
         x = self.relu(self.deconv3(x))
-        x = self.bn3(x + features["x4"])
-        x = self.bn4(self.relu(self.deconv4(x)))
-        x = self.deconv5(x)
-        x = self.bn6(x + inputImg)
-        x = self.sigmoid(self.conv(x))
+        x = x + features["x4"]
+        x = self.relu(self.deconv4(x))
+        x = self.relu(self.deconv5(x))
+        x = x + inputImg
         return x
 
 
