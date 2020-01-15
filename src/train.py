@@ -34,11 +34,12 @@ class USPR:
         self.valLoader = DataLoader(self.valDataset, batch_size=1, num_workers=args.numWorkers)
         self.testLoader = DataLoader(self.TestDataset, batch_size=1, num_workers=args.numWorkers)
         self.finetunePretrainedNet = finetunePretrainedNet
-        self.lossMultiplier = torch.autograd.Variable(torch.tensor(100., requires_grad=True))
+        # self.lossMultiplier = torch.autograd.Variable(torch.tensor(100., requires_grad=True))
+        self.lossMultiplier = 100.
 
         if torch.cuda.is_available():
             self.model.cuda()
-            self.lossMultiplier = self.lossMultiplier.cuda()
+            # self.lossMultiplier = self.lossMultiplier.cuda()
 
         if lossFunction == "mse":
             self.loss = torch.nn.MSELoss()
@@ -69,7 +70,10 @@ class USPR:
                     img = img.cuda()
                 output = self.model(imgDownsample)
                 loss = self.loss(output, img)
-                loss = self.lossMultiplier * loss
+                lossMultiplier = torch.autograd.Variable(torch.tensor(self.lossMultiplier, requires_grad=True))
+                if torch.cuda.is_available():
+                    lossMultiplier = lossMultiplier.cuda()
+                loss = lossMultiplier * loss
                 loss.backward()
                 self.optim.step()
                 self.scheduler.step()
