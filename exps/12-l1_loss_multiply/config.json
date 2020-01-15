@@ -1,0 +1,22 @@
+{
+  "expFolder": "../exps/12-l1_loss_multiply",
+  "numWorkers": 10,
+  "batchSize": 96,
+  "lr": 1e-5,
+  "epochs": 100,
+  "schedulerGamma": 0.5,
+  "schedulerStepSize": 10,
+  "lossFunction": "l1",
+
+  "trainFolder": "../data/coco/coco_train2014",
+  "valFolder": "../data/coco/coco_val2014",
+  "testFolder": "../data/Set14",
+
+  "test": false,
+  "finetunePretrainedNet": false,
+
+  "valTopK": 50,
+  "valStep": 300,
+  "logStep": 10
+
+}

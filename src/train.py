@@ -66,6 +66,7 @@ class USPR:
                     img = img.cuda()
                 output = self.model(imgDownsample)
                 loss = self.loss(output, img)
+                loss = torch.autograd.Variable(torch.tensor(100., requires_grad=True, device="cuda:0")) * loss
                 loss.backward()
                 self.optim.step()
                 self.scheduler.step()
