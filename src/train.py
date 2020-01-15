@@ -35,7 +35,7 @@ class USPR:
         self.testLoader = DataLoader(self.TestDataset, batch_size=1, num_workers=args.numWorkers)
         self.finetunePretrainedNet = finetunePretrainedNet
         # self.lossMultiplier = torch.autograd.Variable(torch.tensor(100., requires_grad=True))
-        self.lossMultiplier = 100.
+        self.lossMultiplier = 1000.
 
         if torch.cuda.is_available():
             self.model.cuda()
@@ -137,6 +137,10 @@ class USPR:
         imageCounter = 0
         if torch.cuda.is_available():
             self.model.cuda()
+
+        print(self.model.superResolution.multiplier3)
+        print(self.model.superResolution.multiplier5)
+
         for step, (imgDownsample, imgs) in enumerate(self.testLoader):
             if torch.cuda.is_available():
                 imgDownsample = imgDownsample.cuda()
