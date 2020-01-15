@@ -24,18 +24,21 @@ class USPR:
         self.stepCounter = 0
         self.epochs = epochs
 
-        self.trainDataset = USPRDataset(args.trainFolder, train=True)
-        self.valDataset = USPRDataset(args.valFolder, topK=args.valTopK)
-        self.TestDataset = USPRDataset(args.testFolder)
+        self.trainDataset = USPRDataset(args.trainFolder, train=True,
+                                        downsampleRate=2, imgSizeFactor=8, imgSize=128)
+        self.valDataset = USPRDataset(args.valFolder, topK=args.valTopK, imgSizeFactor=8, downsampleRate=2)
+        self.TestDataset = USPRDataset(args.testFolder, imgSizeFactor=8, downsampleRate=2)
 
         self.trainLoader = DataLoader(self.trainDataset, batch_size=args.batchSize,
                                       num_workers=args.numWorkers, shuffle=True)
-        self.valLoader = DataLoader(self.valDataset, batch_size=args.batchSize, num_workers=args.numWorkers)
-        self.testLoader = DataLoader(self.TestDataset, batch_size=args.batchSize, num_workers=args.numWorkers)
+        self.valLoader = DataLoader(self.valDataset, batch_size=1, num_workers=args.numWorkers)
+        self.testLoader = DataLoader(self.TestDataset, batch_size=1, num_workers=args.numWorkers)
         self.finetunePretrainedNet = finetunePretrainedNet
+        self.lossMultiplier = torch.autograd.Variable(torch.tensor(100., requires_grad=True))
 
         if torch.cuda.is_available():
             self.model.cuda()
+            self.lossMultiplier = self.lossMultiplier.cuda()
 
         if lossFunction == "mse":
             self.loss = torch.nn.MSELoss()
@@ -66,7 +69,7 @@ class USPR:
                     img = img.cuda()
                 output = self.model(imgDownsample)
                 loss = self.loss(output, img)
-                loss = torch.autograd.Variable(torch.tensor(100., requires_grad=True, device="cuda:0")) * loss
+                loss = self.lossMultiplier * loss
                 loss.backward()
                 self.optim.step()
                 self.scheduler.step()
@@ -107,7 +110,8 @@ class USPR:
                     img = img.cuda()
                 outputs = self.model(imgDownsample)
                 loss = self.loss(outputs, img)
-                print("Val [{}]:[{}/{}] Loss: {}".format(epoch, step, len(self.valLoader), loss.item()))
+                if step % args.logStep == 0:
+                    print("Val [{}]:[{}/{}] Loss: {}".format(epoch, step, len(self.valLoader), loss.item()))
                 outputs = outputs.cpu().detach().numpy().transpose((0, 2, 3, 1))
                 imgs = img.cpu().detach().numpy().transpose((0, 2, 3, 1))
                 for output, img in zip(outputs, imgs):

@@ -51,24 +51,25 @@ class USPRDataset(Dataset):
 
         w, h = img.size
         if w < self.imgSize or h < self.imgSize:
-            raise Exception("Error " + image_path)
-        w = w - w % self.imgSizeFactor
-        h = h - h % self.imgSizeFactor
-        if len(img.getbands()) == 1:
-            img = img.convert("RGB")
+            print(image_path)
+            os.remove(image_path)
+        # w = w - w % self.imgSizeFactor
+        # h = h - h % self.imgSizeFactor
+        # if len(img.getbands()) == 1:
+        #     img = img.convert("RGB")
 
-        if self.train:
-            img = self.trainTransform(img)
-            imgDown = img.resize((self.downsampleSize, self.downsampleSize))
-            imgUp = imgDown.resize((self.imgSize, self.imgSize))
-        else:
-            img = img.crop((0, 0, w, h))
-            imgDown = img.resize((int(w/self.downsampleRate), int(h/self.downsampleRate)))
-            imgUp = imgDown.resize((w, h))
-        imgInput = self.inputTransform(imgUp)
-        img = self.toTensor(img)
+        # if self.train:
+        #     img = self.trainTransform(img)
+        #     imgDown = img.resize((self.downsampleSize, self.downsampleSize))
+        #     imgUp = imgDown.resize((self.imgSize, self.imgSize))
+        # else:
+        #     img = img.crop((0, 0, w, h))
+        #     imgDown = img.resize((int(w/self.downsampleRate), int(h/self.downsampleRate)))
+        #     imgUp = imgDown.resize((w, h))
+        # imgInput = self.inputTransform(imgUp)
+        # img = self.toTensor(img)
 
-        return imgInput, img
+        return 0, 0
 
 
 if __name__ == "__main__":
